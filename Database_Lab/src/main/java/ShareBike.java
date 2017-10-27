@@ -73,12 +73,17 @@ public class ShareBike {
                 "\n" +
                 "  BEGIN\n" +
                 "    INSERT INTO repair (bid, lid) SELECT\n" +
-                "                                    r.bid,\n" +
-                "                                    r.end_lid\n" +
-                "                                  FROM rent r\n" +
-                "                                  WHERE date(r.start_time) > date_sub(NOW(), interval 1 MONTH)\n" +
-                "                                  GROUP BY r.uid\n" +
-                "    HAVING hour(r.end_time - r.start_time) > 200 ;\n" +
+                "                                    table1.bid,\n" +
+                "                                    table1.end_lid\n" +
+                "                                  FROM (SELECT\n" +
+                "                                          r.bid,\n" +
+                "                                          r.end_lid\n" +
+                "                                        FROM rent r\n" +
+                "                                        WHERE date(r.start_time) > date_sub(NOW(), INTERVAL 1 MONTH)\n" +
+                "                                        GROUP BY r.bid\n" +
+                "                                        HAVING sum(minute(r.end_time - r.start_time)) > 300\n" +
+                "                                        ORDER BY r.end_time DESC) table1\n" +
+                "                                  GROUP BY table1.bid;\n" +
                 "  END";
         executeSQLS(new String[]{sql, sql2});
     }

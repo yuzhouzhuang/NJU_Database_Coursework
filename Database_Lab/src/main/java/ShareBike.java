@@ -37,19 +37,71 @@ public class ShareBike {
         endTime = System.currentTimeMillis();
         System.out.println("End Step 3----Using  " + (endTime - startTime) + " ms");
 
-        System.out.println("Step 4----更新单车维护表");
+        System.out.println("Step 4----更新用户余额");
         startTime = System.currentTimeMillis();
-        dormitoryManager.updateRepairInfo();
+        dormitoryManager.updateMoneyInfo();
         endTime = System.currentTimeMillis();
         System.out.println("End Step 4----Using  " + (endTime - startTime) + " ms");
 
+        System.out.println("Step 5----更新单车维护表");
+        startTime = System.currentTimeMillis();
+        dormitoryManager.updateRepairInfo();
+        endTime = System.currentTimeMillis();
+        System.out.println("End Step 5----Using  " + (endTime - startTime) + " ms");
+
+    }
+
+    private void updateMoneyInfo() {
+        String sql1 = "UPDATE rent r\n" +
+                "SET r.charge = if(minute(r.end_time - r.start_time) <= 30, 1,\n" +
+                "                  if(minute(r.end_time - r.start_time) <= 60, 2, if(minute(r.end_time - r.start_time) <= 90, 3, 4)));";
+        String sql2 = "UPDATE user u, (SELECT\n" +
+                "                  r.uid,\n" +
+                "                  sum(r.charge) charge\n" +
+                "                FROM rent r\n" +
+                "                GROUP BY r.uid) money_info\n" +
+                "SET u.money = u.money - money_info.charge\n" +
+                "WHERE u.uid = money_info.uid";
+        executeSQLS(new String[]{sql1, sql2});
     }
 
     private void updateRepairInfo() {
+        String sql = "DROP EVENT IF EXISTS event_month;";
+        String sql2 = "CREATE DEFINER =`root`@`localhost` EVENT event_month\n" +
+                "  ON SCHEDULE EVERY 1 MONTH STARTS '2017-11-01 00:00:00'\n" +
+                "  ON COMPLETION NOT PRESERVE ENABLE DO\n" +
+                "\n" +
+                "  BEGIN\n" +
+                "    INSERT INTO repair (bid, lid) SELECT\n" +
+                "                                    r.bid,\n" +
+                "                                    r.end_lid\n" +
+                "                                  FROM rent r\n" +
+                "                                  WHERE date(r.start_time) > date_sub(NOW(), interval 1 MONTH)\n" +
+                "                                  GROUP BY r.uid\n" +
+                "    HAVING hour(r.end_time - r.start_time) > 200 ;\n" +
+                "  END";
+        executeSQLS(new String[]{sql, sql2});
     }
 
     private void addHomePosition() {
-
+        String sql = "UPDATE user u, location l, (\n" +
+                "\n" +
+                "                             SELECT\n" +
+                "                               table1.uid,\n" +
+                "                               table1.end_lid\n" +
+                "                             FROM (SELECT\n" +
+                "                                     r.uid,\n" +
+                "                                     r.end_lid,\n" +
+                "                                     count(*) c\n" +
+                "                                   FROM rent r\n" +
+                "                                   WHERE hour(r.end_time) BETWEEN 18 AND 24\n" +
+                "                                   GROUP BY r.uid, r.end_lid\n" +
+                "                                   ORDER BY r.uid ASC) table1\n" +
+                "                             GROUP BY table1.uid\n" +
+                "                             ORDER BY table1.c DESC) rent_info\n" +
+                "SET u.home = l.lname\n" +
+                "WHERE u.uid = rent_info.uid AND l.lid = rent_info.end_lid";
+        executeSQL(sql);
     }
 
 
@@ -77,7 +129,7 @@ public class ShareBike {
                 "  `uid` INT(11) NOT NULL,\n" +
                 "  `uname` VARCHAR(11) NOT NULL,\n" +
                 "  `phone` VARCHAR(11) NOT NULL,\n" +
-                "  `money` DOUBLE NOT NULL,\n" +
+                "  `money` FLOAT NOT NULL,\n" +
                 "  `home` VARCHAR(255),\n" +
                 "  PRIMARY KEY (`uid`)\n" +
                 ");";
@@ -186,7 +238,7 @@ public class ShareBike {
 
         mark = 0;
         while (mark < recordData.size()) {
-            if (mark + 10000 >=recordData.size()) {
+            if (mark + 10000 >= recordData.size()) {
                 tempData = recordData.subList(mark, recordData.size());
             } else {
                 tempData = recordData.subList(mark, mark + 10000);

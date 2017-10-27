@@ -48,14 +48,36 @@ public class Dormitory {
     }
 
     private void exchangeDormitory() {
-        executeSQL(new String[]{"UPDATE student s1\n" +
-                "  JOIN student s2\n" +
-                "  JOIN institution i ON s1.gender = '男' AND s2.gender = '女' AND s1.iid = s2.iid AND s1.iid = i.iid AND i.iname = '软件学院'\n" +
-                "SET s1.did = s2.did, s2.did = s1.did"});
+        //注释中的语句写着简单，运行很慢
+//        executeSQLS(new String[]{"UPDATE student s1\n" +
+//                "  JOIN student s2\n" +
+//                "  JOIN institution i ON s1.gender = '男' AND s2.gender = '女' AND s1.iid = s2.iid AND s1.iid = i.iid AND i.iname = '软件学院'\n" +
+//                "SET s1.did = s2.did, s2.did = s1.did"});
+
+        String findID = "SELECT @id := i.iid\n" +
+                "FROM institution i\n" +
+                "WHERE i.iname = '软件学院';";
+
+        String findMale = "SELECT @maleDormitory := s.did\n" +
+                "FROM student s\n" +
+                "WHERE s.gender = '男' AND s.iid = @id;";
+        String findFemale = "SELECT @femaleDormitory := s.did\n" +
+                "FROM student s\n" +
+                "WHERE s.gender = '女' AND s.iid = @id;";
+        String updateMale = "UPDATE student s\n" +
+                "SET s.did = @femaleDormitory\n" +
+                "WHERE s.gender = '男' AND s.iid = @id;";
+        String updateFemale = "UPDATE student s\n" +
+                "SET s.did = @maleDormitory\n" +
+                "WHERE s.gender = '女' AND s.iid = @id;";
+        executeSQL(findID);
+        executeSQL(findFemale);
+        executeSQL(findMale);
+        executeSQLS(new String[]{updateMale, updateFemale});
     }
 
     private void modifyCharge() {
-        executeSQL(new String[]{"UPDATE dormitory SET charge = '1200' WHERE dname = '陶园1舍'"});
+        executeSQLS(new String[]{"UPDATE dormitory SET charge = '1200' WHERE dname = '陶园1舍'"});
     }
 
     private void findWangXiaoxing() {
@@ -65,16 +87,7 @@ public class Dormitory {
                 "                        (SELECT did\n" +
                 "                         FROM student\n" +
                 "                         WHERE sname = '王小星')";
-        try {
-            Statement statement = conn.createStatement();
-            ResultSet rs = statement.executeQuery(sql);
-            while (rs.next()) {
-                System.out.println(rs.getString(1));
-            }
-            statement.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        executeSQL(sql);
     }
 
 
@@ -119,17 +132,27 @@ public class Dormitory {
                 "  `phone` INT(11) NOT NULL,\n" +
                 "  PRIMARY KEY (`did`)\n" +
                 ");";
-        executeSQL(new String[]{student_check, institution_check, dormitory_check});
-        executeSQL(new String[]{institution_create, dormitory_create, student_create});
+        executeSQLS(new String[]{student_check, institution_check, dormitory_check});
+        executeSQLS(new String[]{institution_create, dormitory_create, student_create});
     }
 
-    private void executeSQL(String[] sqlList) {
+    private void executeSQLS(String[] sqlList) {
         try {
             Statement statement = conn.createStatement();
             for (String sql : sqlList) {
                 statement.addBatch(sql);
             }
             statement.executeBatch();
+            statement.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void executeSQL(String sql) {
+        try {
+            Statement statement = conn.createStatement();
+            statement.execute(sql);
             statement.close();
         } catch (Exception e) {
             e.printStackTrace();
@@ -153,15 +176,14 @@ public class Dormitory {
         StringBuffer institutionSQL = new StringBuffer();
         institutionSQL.append("INSERT INTO institution(iname) VALUES ");
         for (String record : institutionList) {
-            if (mark){
+            if (mark) {
                 mark = false;
             } else {
                 institutionSQL.append(",");
             }
             institutionSQL.append("('" + record + "')");
         }
-        System.out.println(institutionSQL.toString());
-        executeSQL(new String[]{institutionSQL.toString()});
+        executeSQLS(new String[]{institutionSQL.toString()});
 
 
         HashMap<String, String[]> dormitoryMap = new HashMap<String, String[]>();
@@ -182,7 +204,7 @@ public class Dormitory {
         StringBuffer dormitorySQL = new StringBuffer();
         dormitorySQL.append("INSERT INTO dormitory(dname, phone, charge,campus) VALUES ");
         for (String[] dormitoryRecord : dormitoryData.subList(1, dormitoryData.size())) {
-            if (mark){
+            if (mark) {
                 mark = false;
             } else {
                 dormitorySQL.append(",");
@@ -191,14 +213,14 @@ public class Dormitory {
             dormitorySQL.append("('" + record[0] + "','" +
                     record[1] + "','" + dormitoryMap.get(record[0])[1] + "','" + dormitoryMap.get(record[0])[0] + "')");
         }
-        executeSQL(new String[]{dormitorySQL.toString()});
+        executeSQLS(new String[]{dormitorySQL.toString()});
 
-        StringBuffer studentSQL = new  StringBuffer();
+        StringBuffer studentSQL = new StringBuffer();
         studentSQL.append("INSERT INTO student(sid, sname, gender, iid, did) VALUES ");
 
         mark = true;
         for (String[] studentRecord : studentData.subList(1, studentData.size())) {
-            if (mark){
+            if (mark) {
                 mark = false;
             } else {
                 studentSQL.append(",");
@@ -208,7 +230,7 @@ public class Dormitory {
                     record[2] + "','" + record[3] + "','" + (institutionList.indexOf(record[0]) + 1) + "','" +
                     (dormitoryList.indexOf(record[5]) + 1) + "')");
         }
-        executeSQL(new String[]{studentSQL.toString()});
+        executeSQLS(new String[]{studentSQL.toString()});
     }
 
     private ArrayList<String[]> readFile(String filePath) {

@@ -50,13 +50,13 @@
 	DELETE FROM commit WHERE total_add > 5000 AND total_delete < 100
 
 ####(2)查询项目中每一个迭代每一个学生的代码提交数量，显示迭代id，学生姓名，代码行数。
-	SELECT d.id, c.author, count(*) FROM commit c, deadline d WHERE c.datetime BETWEEN d.start_day AND d.end_day GROUP BY c.author, d.id
+	SELECT d.id, c.author, sum(c.total_add) - sum(c.total_delete) line FROM commit c, deadline d WHERE c.datetime BETWEEN d.start_day AND d.end_day GROUP BY c.author, d.id
 	
 ####(3)查询项目中所有的java文件占总文件数量的比例，显示java文件的数量，总文件的数量。
 	SELECT (SELECT count(DISTINCT f1.filename) FROM file f1 WHERE f1.filename LIKE '%.java') java_file, count(DISTINCT f2.filename) all_file FROM file f2
 	
 ####(4)查询项目过程中每个迭代中提交代码次数最多的日期，显示迭代号，提交日期，对应日期提交的次数。
-	SELECT *  (SELECT d.id id, DATE(c.datetime) commitDate, count(*) count FROM commit c, deadline d WHERE c.datetime BETWEEN d.start_day AND d.end_day GROUP BY d.id, commitDate) count_iteration1 WHERE count_iteration1.count = (SELECT max(count_iteration2.count) FROM (SELECT d.id id, DATE(c.datetime) commitDate, count(*) count FROM commit c, deadline d WHERE c.datetime BETWEEN d.start_day AND d.end_day GROUP BY d.id, commitDate) count_iteration2 WHERE count_iteration2.id = count_iteration1.id)
+	SELECT *  FROM (SELECT d.id id, DATE(c.datetime) commitDate, count(*) count FROM commit c, deadline d WHERE c.datetime BETWEEN d.start_day AND d.end_day GROUP BY d.id, commitDate) count_iteration1 WHERE count_iteration1.count = (SELECT max(count_iteration2.count) FROM (SELECT d.id id, DATE(c.datetime) commitDate, count(*) count FROM commit c, deadline d WHERE c.datetime BETWEEN d.start_day AND d.end_day GROUP BY d.id, commitDate) count_iteration2 WHERE count_iteration2.id = count_iteration1.id)
 
 ####(5)查询所有的文件行数超过200行的java文件（假设每个文件的初始行数为0行），并按照降序排列，显示文件名，文件的代码行数。
 	SELECT f.filename, sum(f.add_line) - sum(f.delete_line) line FROM file f GROUP BY f.filename HAVING sum(f.add_line) - sum(f.delete_line) > 200 ORDER BY sum(f.add_line) - sum(f.delete_line) DESC

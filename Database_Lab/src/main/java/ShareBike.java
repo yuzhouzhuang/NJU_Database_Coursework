@@ -37,7 +37,7 @@ public class ShareBike {
         endTime = System.currentTimeMillis();
         System.out.println("End Step 3----Using  " + (endTime - startTime) + " ms");
 
-        System.out.println("Step 4----更新用户余额");
+        System.out.println("Step 4----更新用户余额(这一步合并到 Step 2 插入数据,建立了对rent表的触发器,插入数据的时候自动更新🈷️信息)");
         startTime = System.currentTimeMillis();
         dormitoryManager.updateMoneyInfo();
         endTime = System.currentTimeMillis();
@@ -52,17 +52,17 @@ public class ShareBike {
     }
 
     private void updateMoneyInfo() {
-        String sql1 = "UPDATE rent r\n" +
-                "SET r.charge = if(minute(r.end_time - r.start_time) <= 30, 1,\n" +
-                "                  if(minute(r.end_time - r.start_time) <= 60, 2, if(minute(r.end_time - r.start_time) <= 90, 3, 4)));";
-        String sql2 = "UPDATE user u, (SELECT\n" +
-                "                  r.uid,\n" +
-                "                  sum(r.charge) charge\n" +
-                "                FROM rent r\n" +
-                "                GROUP BY r.uid) money_info\n" +
-                "SET u.money = u.money - money_info.charge\n" +
-                "WHERE u.uid = money_info.uid";
-        executeSQLS(new String[]{sql1, sql2});
+//        String sql1 = "UPDATE rent r\n" +
+//                "SET r.charge = if(minute(r.end_time - r.start_time) <= 30, 1,\n" +
+//                "                  if(minute(r.end_time - r.start_time) <= 60, 2, if(minute(r.end_time - r.start_time) <= 90, 3, 4)));";
+//        String sql2 = "UPDATE user u, (SELECT\n" +
+//                "                  r.uid,\n" +
+//                "                  sum(r.charge) charge\n" +
+//                "                FROM rent r\n" +
+//                "                GROUP BY r.uid) money_info\n" +
+//                "SET u.money = u.money - money_info.charge\n" +
+//                "WHERE u.uid = money_info.uid";
+//        executeSQLS(new String[]{sql1, sql2});
     }
 
     private void updateRepairInfo() {
@@ -165,6 +165,10 @@ public class ShareBike {
                 ");";
         executeSQLS(new String[]{bike_check, user_check, location_check, rent_check, repair_check});
         executeSQLS(new String[]{user_create, location_create, bike_create, rent_create, repair_create});
+
+//        String sql = "CREATE INDEX idx_user\n" +
+//                "ON rent(bid, uid, start_time, end_time);";
+//        executeSQL(sql);
     }
 
     private void executeSQLS(String[] sqlList) {
@@ -192,6 +196,8 @@ public class ShareBike {
 
 
     private void insertData() {
+
+
         ArrayList<String[]> bikeData = readFile("src/main/resources/bike.txt");
         StringBuffer bikeSQL = new StringBuffer();
         bikeSQL.append("INSERT INTO bike(bid) VALUES ");
@@ -241,6 +247,28 @@ public class ShareBike {
         locationSQL.deleteCharAt(locationSQL.length() - 1);
         executeSQL(locationSQL.toString());
 
+        String sql = "DROP TRIGGER IF EXISTS charge_upgrade;";
+        String sql2 = "CREATE TRIGGER charge_upgrade\n" +
+                "BEFORE INSERT ON rent\n" +
+                "FOR EACH ROW\n" +
+                "  BEGIN\n" +
+                "    SET NEW.charge = if(minute(NEW.end_time - NEW.start_time) <= 30, 1,\n" +
+                "                        if(minute(NEW.end_time - NEW.start_time) <= 60, 2,\n" +
+                "                           if(minute(NEW.end_time - NEW.start_time) <= 90, 3, 4)));\n" +
+                "    SELECT u.money\n" +
+                "    INTO @mo\n" +
+                "    FROM user u\n" +
+                "    WHERE u.uid = NEW.uid;\n" +
+                "\n" +
+                "    IF @mo < 0\n" +
+                "    THEN SET NEW.uid = -1, NEW.bid = -1;\n" +
+                "    ELSE UPDATE user u\n" +
+                "    SET u.money = u.money - NEW.charge\n" +
+                "    WHERE u.uid = NEW.uid;\n" +
+                "    END IF;\n" +
+                "  END;";
+        executeSQLS(new String[]{sql, sql2});
+
         mark = 0;
         while (mark < recordData.size()) {
             if (mark + 10000 >= recordData.size()) {
@@ -260,6 +288,9 @@ public class ShareBike {
             recordSQL.deleteCharAt(recordSQL.length() - 1);
             executeSQL(recordSQL.toString());
         }
+
+        sql = "DELETE FROM rent WHERE uid = -1";
+        executeSQL(sql);
 
     }
 
